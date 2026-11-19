@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>NextTransformer · Arena v2 实时研究监控台</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --surface: #ffffff;
+    --surface-subtle: #f1f5f9;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --primary: #2563eb;
+    --primary-soft: #eff6ff;
+    --green: #059669;
+    --green-soft: #ecfdf5;
+    --amber: #d97706;
+    --amber-soft: #fffbeb;
+    --rose: #e11d48;
+    --rose-soft: #fff1f2;
+    --violet: #7c3aed;
+    --violet-soft: #f5f3ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+  }
+  .live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .live-pill.live { background: var(--green-soft); color: var(--green); border: 1px solid #a7f3d0; }
+  .live-pill.done { background: var(--surface-subtle); color: var(--text-secondary); border: 1px solid var(--border); }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .live-pill.live .dot { animation: pulse 1.6s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+  }
+  .top-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  select, input[type="text"], button {
+    font-family: inherit;
+    font-size: 12.5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 5px 10px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+  }
+  button { cursor: pointer; font-weight: 500; transition: all 0.15s; }
+  button:hover { background: var(--surface-subtle); }
+  button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-blue { background: var(--primary-soft); color: var(--primary); }
+  .badge-green { background: var(--green-soft); color: var(--green); }
+  .badge-amber { background: var(--amber-soft); color: var(--amber); }
+  .badge-rose { background: var(--rose-soft); color: var(--rose); }
+  .badge-violet { background: var(--violet-soft); color: var(--violet); }
+  .badge-gray { background: var(--surface-subtle); color: var(--text-secondary); }
+
+  .container {
+    max-width: 1640px;
+    margin: 0 auto;
+    padding: 16px 20px 36px;
+  }
+  .session-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .session-tab {
+    flex: 1 1 300px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 11px;
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    box-shadow: var(--shadow);
+    transition: all 0.16s;
+  }
+  .session-tab:hover { border-color: #93c5fd; }
+  .session-tab.selected {
+    border-color: var(--primary);
+    background: #f5f9ff;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 680px) { .kpi-grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .kpi-sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .gpu-slots {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 5px;
+    margin-top: 10px;
+  }
+  .gpu-slot {
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: all 0.25s;
+  }
+  .gpu-slot.on {
+    background: #dbeafe;
+    border-color: #60a5fa;
+    color: #1d4ed8;
+    font-weight: 700;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
+  }
+  /* Multi-node clusters: one row per node, compact cells. */
+  .gpu-slots.dense {
+    gap: 3px;
+    margin-top: 8px;
+  }
+  .gpu-slots.dense .gpu-slot {
+    height: 17px;
+    border-radius: 4px;
+    font-size: 8.5px;
+    flex-direction: row;
+    gap: 3px;
+  }
+  .progress-track {
+    height: 9px;
+    border-radius: 999px;
+    background: var(--surface-subtle);
+    overflow: hidden;
+    display: flex;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+  }
+  .progress-spent { background: var(--primary); height: 100%; transition: width 0.3s; }
+  .progress-reserved { background: #f59e0b; height: 100%; transition: width 0.3s; }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1120px) { .workspace { grid-template-columns: 1fr; } }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .filter-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .stream-box {
+    max-height: calc(100vh - 285px);
+    min-height: 520px;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stream-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+  }
+  .stream-item.msg {
+    border-left: 4px solid var(--primary);
+    background: #f8fbff;
+  }
+  .stream-item.running {
+    border-color: #93c5fd;
+    background: #eff6ff;
+  }
+  .stream-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+  }
+  .msg-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.58;
+  }
+  .cmd-line {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 7px 10px;
+    border-radius: 7px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  details.cmd-details summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--primary);
+    margin-top: 6px;
+    user-select: none;
+  }
+  pre.cmd-out {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    max-height: 280px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #1e293b;
+  }
+
+  .right-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 8px;
+    border-bottom: 1px solid var(--surface-subtle);
+    vertical-align: middle;
+  }
+  tr.clickable:hover { background: #f8fafc; cursor: pointer; }
+  tr.best-row { background: #ecfdf5; }
+  .mono { font-family: var(--mono); }
+
+  .chart-wrap {
+    width: 100%;
+    height: 220px;
+    position: relative;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.48);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 14px;
+    max-width: 920px;
+    width: 100%;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+  }
+  .modal-body {
+    padding: 16px 18px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .code-block {
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span>NextTransformer · Arena v2 实时监控台</span>
+    <span id="livePill" class="live-pill live"><span class="dot"></span><span id="liveText">LIVE</span></span>
+    <span id="modelBadge" class="badge badge-violet mono">codex · gpt-6-astra · max</span>
+  </div>
+  <div class="top-controls">
+    <label>会话：
+      <select id="trialSelect"></select>
+    </label>
+    <span>已运行：<strong id="elapsedText" class="mono">--</strong></span>
+    <span>上次同步：<span id="syncTime" class="mono">--</span></span>
+    <button id="autoRefreshBtn" class="active" title="每 3 秒自动同步最新进度">自动刷新: 开</button>
+    <button id="manualRefreshBtn">立即刷新</button>
+  </div>
+</header>
+
+<main class="container">
+  <section id="sessionTabsBar" class="session-tabs" style="display:none;"></section>
+  <section class="kpi-grid">
+    <!-- KPI 1: GPU Usage -->
+    <div class="card">
+      <div class="kpi-label">
+        <span id="gpuClusterTitle">实时 GPU 占用</span>
+        <span id="gpuConfigBadge" class="badge badge-blue mono">bf16 · compile · landlock</span>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+        <div class="kpi-value"><span id="activeGpus">0</span> <span style="font-size:15px;color:var(--text-muted);font-weight:500;">/ <span id="maxGpus">8</span> 张 <span id="gpuShortText">H200</span></span></div>
+        <span id="gpuHoursBadge" class="badge badge-gray mono">0.000 GPU-h</span>
+      </div>
+      <div id="activeModeText" class="kpi-sub">正在连接监控服务...</div>
+      <div id="gpuSlots" class="gpu-slots"></div>
+    </div>
+
+    <!-- KPI 2: Active Koala Job -->
+    <div class="card">
+      <div class="kpi-label">
+        <span>当前集群作业进度</span>
+        <span id="koalaStageBadge" class="badge badge-gray">空闲</span>
+      </div>
+      <div id="koalaJobTitle" class="kpi-value" style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">暂无运行中的 GPU 作业</div>
+      <div class="progress-track">
+        <div id="jobStepBar" class="progress-spent" style="width:0%;background:var(--green);"></div>
+      </div>
+      <div id="koalaJobSub" class="kpi-sub mono">Agent 正在容器内调研代码或进行静态 FLOPs 校准</div>
+    </div>
+
+    <!-- KPI 3: Research FLOPs Budget -->
+    <div class="card">
+      <div class="kpi-label">
+        <span>研究算力预算 (1.96×10²⁰ FLOPs)</span>
+        <span id="budgetPctBadge" class="badge badge-blue mono">已用 0.00%</span>
+      </div>
+      <div class="kpi-value mono" id="spentFlopsText" style="font-size:20px;">0.00e+0 / 1.96e+20</div>
+      <div class="progress-track" title="蓝色：已消耗 | 橙色：运行/排队预留">
+        <div id="spentBar" class="progress-spent" style="width:0%"></div>
+        <div id="reservedBar" class="progress-reserved" style="width:0%"></div>
+      </div>
+      <div id="budgetSubText" class="kpi-sub">预留中: 0 FLOPs · 约合 0 / 40,000 协议步</div>
+    </div>
+
+    <!-- KPI 4: Best Score & LLM Tokens -->
+    <div class="card">
+      <div class="kpi-label">
+        <span>当前最优 Dev BPB &amp; Agent 用量</span>
+        <span id="cacheHitBadge" class="badge badge-green mono">Cache --%</span>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;">
+        <div>
+          <span style="font-size:12px;color:var(--text-muted);">Best Dev BPB: </span>
+          <span id="bestBpbText" class="kpi-value mono" style="color:var(--green);">—</span>
+        </div>
+        <span id="candCountBadge" class="badge badge-violet">0 个候选</span>
+      </div>
+      <div id="tokenSubText" class="kpi-sub mono">输入 -- · 输出 -- · 思考 -- · 命令 0 次</div>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <!-- Left Column: Live Agent Output Stream -->
+    <div class="card">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Agent 实时输出流</span>
+          <span id="streamCountBadge" class="badge badge-gray mono">0 条</span>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-btn active" data-filter="all">全部</button>
+          <button class="filter-btn" data-filter="agent_message">Agent 汇报</button>
+          <button class="filter-btn" data-filter="command_execution">命令与调用</button>
+          <input type="text" id="searchInput" placeholder="搜索输出关键词..." style="width:140px;">
+          <button id="autoScrollBtn" class="active">自动贴底</button>
+        </div>
+      </div>
+      <div id="streamBox" class="stream-box"></div>
+    </div>
+
+    <!-- Right Column: Loss Curve + Candidates + Experiments -->
+    <div class="right-stack">
+      <div class="card">
+        <div class="panel-header" style="margin-bottom:8px;">
+          <div class="panel-title">
+            <span>实验训练 Loss 曲线 (512 rows/update)</span>
+          </div>
+          <span class="badge badge-gray">实时绘制</span>
+        </div>
+        <div id="chartBox" class="chart-wrap"></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>候选架构排行榜（点击行查看假设与插件源码）</span>
+          </div>
+          <span id="admittedSummary" class="badge badge-green">0 已准入</span>
+        </div>
+        <div style="overflow-x:auto;max-height:310px;overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>候选 / 方法</th>
+                <th>结构 (L×W / MLP)</th>
+                <th>Anchor 比</th>
+                <th>准入状态</th>
+                <th>最大步数</th>
+                <th>Train Loss</th>
+                <th>Dev BPB</th>
+              </tr>
+            </thead>
+            <tbody id="candidatesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>实验与验证作业流水</span>
+          </div>
+          <span id="expSummary" class="badge badge-gray">0 个作业</span>
+        </div>
+        <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>作业</th>
+                <th>操作</th>
+                <th>状态</th>
+                <th>候选方法</th>
+                <th>步数进度</th>
+                <th>GPU</th>
+                <th>耗时 / GPU-h</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody id="experimentsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Candidate Detail Modal -->
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head">
+      <span id="modalTitle">候选详情</span>
+      <button id="modalCloseBtn">关闭 (Esc)</button>
+    </div>
+    <div id="modalBody" class="modal-body"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  let currentTrial = null;
+  let autoRefresh = true;
+  let autoScroll = true;
+  let activeFilter = "all";
+  let searchQuery = "";
+  let latestData = null;
+  const openDetails = new Set();
+
+  const PALETTE = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#e11d48", "#0891b2", "#4f46e5", "#ea580c"];
+
+  const $ = (id) => document.getElementById(id);
+
+  function fmtDuration(sec) {
+    if (sec == null || isNaN(sec)) return "--";
+    sec = Math.max(0, Math.round(sec));
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function fmtFlops(strVal) {
+    const n = Number(strVal || 0);
+    if (!n) return "0";
+    return n.toExponential(2);
+  }
+
+  function fmtTokens(n) {
+    n = Number(n || 0);
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+    return String(n);
+  }
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function stateBadge(state) {
+    const map = {
+      running: ["badge-blue", "运行中"],
+      queued: ["badge-amber", "排队中"],
+      succeeded: ["badge-green", "成功"],
+      cancelled: ["badge-gray", "已取消"],
+      cancelling: ["badge-amber", "取消中"],
+      failed: ["badge-rose", "失败"],
+      reconciliation: ["badge-rose", "待对账"],
+    };
+    const [cls, label] = map[state] || ["badge-gray", state];
+    return `<span class="badge ${cls}">${esc(label)}</span>`;
+  }
+
+  function gpuShort() {
+    return (latestData && latestData.gpu && latestData.gpu.gpu_short) || "H200";
+  }
+
+  function stageLabel(stage, aj) {
+    const gpus = (aj && aj.gpus) || 8;
+    const nodes = (aj && aj.nodes) || 1;
+    const map = {
+      submitted: "已提交至集群队列",
+      scheduling: "集群分配节点中",
+      initializing_pod: "拉取不可变代码快照",
+      building_venv_and_staging_data: "初始化节点环境 (uv sync)",
+      staging_1000_shards: "高速拉取 1,000 个训练分片",
+      checking_mesh: `${nodes} 节点 NCCL 互联检测`,
+      starting_worker: aj && aj.isolation === "none"
+        ? `${nodes > 1 ? `${nodes} 节点互联就绪 · ` : ""}断网 · 加载模型`
+        : "Landlock 沙箱就绪 · 加载模型",
+      compiling_and_step_1: "编译算子 & 执行 Step 1",
+      training: `${gpus}×${gpuShort()} 高速训练中`,
+      running: "GPU 执行中",
+    };
+    return map[stage] || stage || "运行中";
+  }
+
+  function renderGpuSlots(maxGpus, activeGpus, peaks) {
+    const box = $("gpuSlots");
+    // Beyond one 8-GPU node, draw one compact row per node.
+    const dense = maxGpus > 8;
+    box.classList.toggle("dense", dense);
+    let html = "";
+    for (let i = 0; i < maxGpus; i++) {
+      const on = i < activeGpus;
+      const p = peaks && peaks[i] != null
+        ? `${dense ? Math.round(peaks[i]) : peaks[i]}G`
+        : (on ? (dense ? "" : "ACTIVE") : (dense ? "" : "IDLE"));
+      const name = dense ? `N${Math.floor(i / 8)}·${i % 8}` : `GPU ${i}`;
+      html += `<div class="gpu-slot ${on ? "on" : ""}" title="GPU ${i}${dense ? ` (node ${Math.floor(i / 8)})` : ""}${peaks && peaks[i] != null ? ` · peak ${peaks[i]} GiB` : ""}">
+        <span>${name}</span>
+        ${p ? `<span style="font-size:${dense ? 8 : 9}px;opacity:0.85;">${esc(p)}</span>` : ""}
+      </div>`;
+    }
+    box.innerHTML = html;
+  }
+
+  function renderChart(experiments) {
+    const box = $("chartBox");
+    const runs = (experiments || []).filter(e => e.curves && e.curves.length > 0).slice().reverse();
+    if (!runs.length) {
+      box.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;background:var(--surface-subtle);border-radius:8px;">等待首个训练作业产出 Loss 曲线...（当前首个训练作业完成后将自动绘制）</div>`;
+      return;
+    }
+    const W = 640, H = 210, padL = 46, padR = 18, padT = 16, padB = 30;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    runs.forEach(r => {
+      r.curves.forEach(pt => {
+        minX = Math.min(minX, pt.update);
+        maxX = Math.max(maxX, pt.update);
+        minY = Math.min(minY, pt.training_loss);
+        maxY = Math.max(maxY, pt.training_loss);
+      });
+    });
+    if (minX === maxX) { minX = Math.max(0, minX - 1); maxX += 1; }
+    if (minY === maxY) { minY -= 0.5; maxY += 0.5; }
+    const yPad = (maxY - minY) * 0.08;
+    minY = Math.max(0, minY - yPad);
+    maxY += yPad;
+
+    const sx = x => padL + ((x - minX) / (maxX - minX)) * (W - padL - padR);
+    const sy = y => H - padB - ((y - minY) / (maxY - minY)) * (H - padT - padB);
+
+    let grid = "";
+    for (let i = 0; i <= 4; i++) {
+      const yVal = minY + ((maxY - minY) * i) / 4;
+      const y = sy(yVal);
+      grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-dasharray="3,3"/>`;
+      grid += `<text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#64748b" font-family="monospace">${yVal.toFixed(2)}</text>`;
+    }
+    for (let i = 0; i <= 4; i++) {
+      const xVal = Math.round(minX + ((maxX - minX) * i) / 4);
+      const x = sx(xVal);
+      grid += `<text x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10.5" fill="#64748b" font-family="monospace">step ${xVal}</text>`;
+    }
+
+    let paths = "";
+    let legends = "";
+    runs.forEach((r, idx) => {
+      const color = PALETTE[idx % PALETTE.length];
+      const pts = r.curves.map(pt => `${sx(pt.update).toFixed(1)},${sy(pt.training_loss).toFixed(1)}`).join(" ");
+      paths += `<polyline fill="none" stroke="${color}" stroke-width="2.2" points="${pts}"/>`;
+      const last = r.curves[r.curves.length - 1];
+      paths += `<circle cx="${sx(last.update).toFixed(1)}" cy="${sy(last.training_loss).toFixed(1)}" r="3.5" fill="${color}"/>`;
+      const label = `${r.method} (${r.candidate_short})${r.dev_bpb ? ` · bpb ${r.dev_bpb.toFixed(4)}` : ""}`;
+      legends += `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:11px;color:#334155;">
+        <i style="width:10px;height:3px;background:${color};display:inline-block;border-radius:2px;"></i>${esc(label)}
+      </span>`;
+    });
+
+    box.innerHTML = `
+      <div style="margin-bottom:4px;white-space:nowrap;overflow-x:auto;">${legends}</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:185px;overflow:visible;">
+        ${grid}
+        ${paths}
+      </svg>
+    `;
+  }
+
+  function renderCandidates(candidates) {
+    const tbody = $("candidatesBody");
+    const admittedCount = (candidates || []).filter(c => c.admitted === true).length;
+    $("admittedSummary").textContent = `${admittedCount} / ${(candidates || []).length} 已准入`;
+
+    if (!candidates || !candidates.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:18px;">Agent 正在阅读接口与历史实验，尚未提交首个候选包...</td></tr>`;
+      return;
+    }
+    const sorted = candidates.slice().sort((a, b) => {
+      if (a.best_dev_bpb != null && b.best_dev_bpb != null) return a.best_dev_bpb - b.best_dev_bpb;
+      if (a.best_dev_bpb != null) return -1;
+      if (b.best_dev_bpb != null) return 1;
+      return b.index - a.index;
+    });
+
+    tbody.innerHTML = sorted.map(c => {
+      const arch = c.architecture || {};
+      const shape = `${arch.layers ?? "-"}L × ${arch.width ?? "-"} / ${arch.mlp_width ?? "-"}`;
+      const ratio = c.anchor_ratio != null ? `${(c.anchor_ratio * 100).toFixed(2)}%` : "—";
+      let admHtml = `<span class="badge badge-gray">未验证</span>`;
+      if (c.admitted === true) admHtml = `<span class="badge badge-green">Admitted</span>`;
+      else if (c.admitted === false) admHtml = `<span class="badge badge-amber" title="${esc(c.admission_reason || "")}">未准入</span>`;
+      const bpb = c.best_dev_bpb != null
+        ? `<strong class="mono" style="color:${c.is_best ? "var(--green)" : "var(--text)"}">${c.best_dev_bpb.toFixed(5)}${c.is_best ? " ★" : ""}</strong>`
+        : "—";
+      return `<tr class="clickable ${c.is_best ? "best-row" : ""}" data-cid="${esc(c.id)}">
+        <td class="mono">#${c.index}</td>
+        <td><strong>${esc(c.method)}</strong> <span class="mono" style="color:var(--text-muted);font-size:11px;">${esc(c.short_id)}</span></td>
+        <td class="mono">${esc(shape)}</td>
+        <td class="mono">${esc(ratio)}</td>
+        <td>${admHtml}</td>
+        <td class="mono">${c.max_step || "—"}</td>
+        <td class="mono">${c.last_loss != null ? c.last_loss.toFixed(4) : "—"}</td>
+        <td>${bpb}</td>
+      </tr>`;
+    }).join("");
+
+    tbody.querySelectorAll("tr.clickable").forEach(row => {
+      row.addEventListener("click", () => openCandidateModal(row.dataset.cid));
+    });
+  }
+
+  function renderExperiments(experiments) {
+    const tbody = $("experimentsBody");
+    $("expSummary").textContent = `共 ${(experiments || []).length} 个作业`;
+    if (!experiments || !experiments.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:18px;">暂无已提交的数值实验或校准作业</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = experiments.slice(0, 50).map(e => {
+      const stepStr = e.operation === "train"
+        ? `${e.progress ?? 0} / ${e.target_update ?? "?"}`
+        : (e.operation === "validate" ? "checks (5)" : `grid (${e.progress ?? 0})`);
+      const dur = e.pod_seconds != null
+        ? `${fmtDuration(e.pod_seconds)} (${Number(e.gpu_hours || 0).toFixed(3)}h)`
+        : (e.state === "running" ? "运行中..." : "—");
+      let outcome = "—";
+      if (e.dev_bpb != null) outcome = `bpb ${e.dev_bpb.toFixed(5)}`;
+      else if (e.admitted === true) outcome = `<span style="color:var(--green);font-weight:600;">admitted ✓</span>`;
+      else if (e.admitted === false) outcome = `<span title="${esc(e.admission_reason || "")}" style="color:var(--amber);">admitted: false</span>`;
+      return `<tr>
+        <td class="mono" title="${esc(e.koala_job || e.id)}">${esc(e.short_id)}</td>
+        <td><span class="badge ${e.operation === "train" ? "badge-blue" : (e.operation === "validate" ? "badge-violet" : "badge-gray")}">${esc(e.operation)}</span></td>
+        <td>${stateBadge(e.state)}</td>
+        <td>${esc(e.method)} <span class="mono" style="color:var(--text-muted);font-size:11px;">${esc(e.candidate_short)}</span></td>
+        <td class="mono">${esc(stepStr)}</td>
+        <td class="mono">${e.gpus ? `${e.gpus}×${gpuShort()}` : "CPU"}</td>
+        <td class="mono">${esc(dur)}</td>
+        <td class="mono">${outcome}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderStream(items) {
+    const box = $("streamBox");
+    const prevScrollBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+
+    // Remember opened details elements
+    box.querySelectorAll("details[data-id]").forEach(d => {
+      if (d.open) openDetails.add(d.dataset.id);
+      else openDetails.delete(d.dataset.id);
+    });
+
+    const filtered = (items || []).filter(it => {
+      if (activeFilter !== "all" && it.kind !== activeFilter) return false;
+      if (searchQuery) {
+        const hay = `${it.text || ""} ${it.command || ""} ${it.output || ""} ${it.tool || ""}`.toLowerCase();
+        if (!hay.includes(searchQuery)) return false;
+      }
+      return true;
+    });
+    $("streamCountBadge").textContent = `${filtered.length} / ${(items || []).length} 条`;
+
+    if (!filtered.length) {
+      box.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:36px 12px;">暂无匹配的输出记录（Agent 正在深度思考中，max 推理档位首轮思考通常需 20–60 秒）...</div>`;
+      return;
+    }
+
+    box.innerHTML = filtered.map(it => {
+      const running = it.status === "in_progress";
+      if (it.kind === "agent_message") {
+        return `<div class="stream-item msg ${running ? "running" : ""}">
+          <div class="stream-meta">
+            <span><span class="badge badge-blue">Agent 汇报</span> <span class="mono">#${it.seq}</span></span>
+            <span>${running ? '<span class="badge badge-amber">生成中...</span>' : ""}</span>
+          </div>
+          <div class="msg-body">${esc(it.text)}</div>
+        </div>`;
+      }
+      if (it.kind === "command_execution") {
+        const isOpen = openDetails.has(it.id) || running;
+        const codeBadge = running
+          ? `<span class="badge badge-blue">执行中...</span>`
+          : (it.exit_code === 0
+              ? `<span class="badge badge-green mono">exit 0</span>`
+              : `<span class="badge badge-rose mono">exit ${esc(it.exit_code)}</span>`);
+        const outHtml = it.output
+          ? `<details class="cmd-details" data-id="${esc(it.id)}" ${isOpen ? "open" : ""}>
+              <summary>查看终端输出 (${it.output.length} 字符)</summary>
+              <pre class="cmd-out">${esc(it.output)}</pre>
+            </details>`
+          : "";
+        return `<div class="stream-item ${running ? "running" : ""}">
+          <div class="stream-meta">
+            <span><span class="badge badge-gray">Shell 命令</span> <span class="mono">#${it.seq}</span></span>
+            ${codeBadge}
+          </div>
+          <div class="cmd-line">${esc(it.command)}</div>
+          ${outHtml}
+        </div>`;
+      }
+      if (it.kind === "file_change") {
+        const files = (it.changes || []).map(c => `${c.kind}: ${c.path}`).join(", ");
+        return `<div class="stream-item">
+          <div class="stream-meta">
+            <span><span class="badge badge-violet">文件变更</span> <span class="mono">#${it.seq}</span></span>
+            <span class="mono">${esc(it.status)}</span>
+          </div>
+          <div class="mono" style="font-size:12px;">${esc(files)}</div>
+        </div>`;
+      }
+      return `<div class="stream-item">
+        <div class="stream-meta">
+          <span><span class="badge badge-gray">${esc(it.kind)}</span> <span class="mono">#${it.seq}</span></span>
+        </div>
+        <div class="msg-body mono" style="font-size:12px;">${esc(it.tool ? `${it.tool}(${it.arguments || ""})\n${it.output || ""}` : it.text)}</div>
+      </div>`;
+    }).join("");
+
+    if (autoScroll && (prevScrollBottom || box.scrollTop === 0)) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  async function openCandidateModal(cid) {
+    if (!latestData) return;
+    const c = (latestData.candidates || []).find(x => x.id === cid);
+    if (!c) return;
+    let codeFiles = c.code_files;
+    if (!codeFiles && IS_REALTIME) {
+      try {
+        codeFiles = (await getJson(`/api/code/${encodeURIComponent(currentTrial)}`, { cache: "no-store" }))[c.id] || {};
+      } catch (_e) {
+        codeFiles = null;
+      }
+    } else if (!codeFiles && latestData.code) {
+      try {
+        codeFiles = (await fetchVersioned(latestData.code, dataSource))[c.id] || {};
+      } catch (_e) {
+        codeFiles = null;
+      }
+    }
+    $("modalTitle").textContent = `候选 #${c.index} · ${c.method} (${c.short_id})`;
+    const filesHtml = codeFiles === null
+      ? `<div style="color:var(--text-secondary);">源码暂时无法读取，请稍后再打开。</div>`
+      : Object.entries(codeFiles || {}).map(([name, code]) => `
+      <div>
+        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;" class="mono">${esc(name)}</div>
+        <pre class="code-block">${esc(code)}</pre>
+      </div>
+    `).join("");
+
+    $("modalBody").innerHTML = `
+      <div>
+        <div style="font-weight:600;margin-bottom:4px;">研究假设 (Hypothesis)</div>
+        <div style="background:var(--surface-subtle);padding:10px 12px;border-radius:8px;">${esc(c.hypothesis || "（未填写）")}</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;" class="mono">
+        <span class="badge badge-blue">Parameters: ${c.parameters ? c.parameters.toLocaleString() : "—"}</span>
+        <span class="badge badge-violet">Anchor Ratio: ${c.anchor_ratio != null ? (c.anchor_ratio * 100).toFixed(4) + "%" : "—"}</span>
+        <span class="badge ${c.admitted ? "badge-green" : "badge-amber"}">Admitted: ${String(c.admitted)} ${c.admission_reason ? `(${c.admission_reason})` : ""}</span>
+        ${c.best_dev_bpb != null ? `<span class="badge badge-green">Best Dev BPB: ${c.best_dev_bpb.toFixed(5)}</span>` : ""}
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:12.5px;margin-bottom:4px;">architecture.json</div>
+        <pre class="code-block">${esc(JSON.stringify(c.architecture, null, 2))}</pre>
+      </div>
+      ${filesHtml}
+    `;
+    $("modalBackdrop").classList.add("open");
+  }
+
+  // Three ways to get data: the local server (3 s), GitHub Pages (60 s), or the Cloudflare live room,
+  // which pushes changes over a WebSocket about once a second. `?mode=` overrides the choice.
+  const MODE = new URLSearchParams(location.search).get("mode")
+    || ((location.hostname === "127.0.0.1" || location.hostname === "localhost") ? "local"
+      : location.hostname.endsWith("github.io") ? "pages" : "realtime");
+  const IS_LOCAL = MODE === "local";
+  const IS_REALTIME = MODE === "realtime";
+  // On Pages the page reads a small manifest once a minute (never while its tab is hidden) and a
+  // session's files only when their version changes. The live branch on raw.githubusercontent.com is
+  // fresh within about a minute; the Pages copy, rebuilt about every 10 minutes, is the fallback.
+  const POLL_MS = IS_LOCAL ? 3000 : 60000;
+  const LIVE_BASE = "https://raw.githubusercontent.com/ggeeyyi/arena-v2-live/live-data/";
+  const LIVE_RETRY_MS = 5 * 60000;
+
+  let multiCache = null;
+  let liveRetryAt = 0;
+  let dataSource = "";
+  const fileCache = new Map();
+
+  async function getJson(url, options) {
+    const resp = await fetch(url, options);
+    if (!resp.ok) throw new Error(`${resp.status} ${url}`);
+    return await resp.json();
+  }
+
+  function publishedUrl(name, version, source) {
+    const base = source === "live" ? LIVE_BASE : "./";
+    // Unversioned reads share one URL per minute, so the CDN answers most viewers from its cache.
+    const query = version ? `v=${version}` : `m=${Math.floor(Date.now() / 60000)}`;
+    return `${base}${name}?${query}`;
+  }
+
+  async function fetchManifest() {
+    if (Date.now() >= liveRetryAt) {
+      try {
+        return { data: await getJson(publishedUrl("live.json", null, "live"), { cache: "no-store" }), source: "live" };
+      } catch (_e) {
+        liveRetryAt = Date.now() + LIVE_RETRY_MS;
+      }
+    }
+    return { data: await getJson(publishedUrl("live.json", null, "pages"), { cache: "no-store" }), source: "pages" };
+  }
+
+  async function fetchVersioned(ref, source) {
+    const key = `${ref.path}@${ref.v}`;
+    if (fileCache.has(key)) return fileCache.get(key);
+    let data;
+    try {
+      data = await getJson(publishedUrl(ref.path, ref.v, source));
+    } catch (err) {
+      if (source !== "live") throw err;
+      data = await getJson(publishedUrl(ref.path, ref.v, "pages"));
+    }
+    for (const k of [...fileCache.keys()]) {
+      if (k.startsWith(`${ref.path}@`)) fileCache.delete(k);
+    }
+    fileCache.set(key, data);
+    return data;
+  }
+
+  // Cloudflare live room. Messages are a JSON header line plus `key<TAB>item JSON` lines.
+  const rt = {
+    ws: null, retry: 1000, watching: null, order: [], top: {}, summaries: {}, parts: {},
+    tickTime: null, state: "connecting", dirty: { all: true }, hiddenTimer: null,
+  };
+
+  function rtConnect() {
+    if (rt.ws) return;
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    rt.ws = ws;
+    rt.state = "connecting";
+    ws.onopen = () => {
+      rt.retry = 1000;
+      rt.state = "open";
+      rt.watching = currentTrial;
+      ws.send(JSON.stringify({ type: "watch", tid: currentTrial }));
+    };
+    ws.onmessage = (ev) => {
+      try {
+        rtApply(ev.data);
+      } catch (err) {
+        console.error("live message error:", err);
+      }
+      scheduleRender();
+    };
+    ws.onclose = () => {
+      if (rt.ws !== ws) return;
+      rt.ws = null;
+      rt.state = "closed";
+      scheduleRender();
+      if (!document.hidden) setTimeout(rtConnect, rt.retry);
+      rt.retry = Math.min(30000, rt.retry * 2);
+    };
+  }
+
+  function rtWatch(tid) {
+    if (rt.ws && rt.ws.readyState === WebSocket.OPEN && rt.watching !== tid) {
+      rt.watching = tid;
+      rt.ws.send(JSON.stringify({ type: "watch", tid }));
+    }
+  }
+
+  function rtApply(text) {
+    const nl = text.indexOf("\n");
+    const head = JSON.parse(nl < 0 ? text : text.slice(0, nl));
+    if (head.type === "meta") {
+      if (head.reset) {
+        rt.summaries = {};
+        rt.parts = {};
+        rt.dirty.all = true;
+        if (head.watch) rt.watching = head.watch;
+      }
+      if (head.top) rt.top = head.top;
+      if (head.order) rt.order = head.order;
+      Object.assign(rt.summaries, head.summaries || {});
+      rt.dirty.summary = true;
+    } else if (head.type === "tick") {
+      rt.tickTime = head.t;
+      for (const [tid, t] of Object.entries(head.ticks || {})) {
+        const s = rt.summaries[tid];
+        if (!s) continue;
+        if (s.session) s.session.elapsed_sec = t.e;
+        if (s.gpu) {
+          s.gpu.total_gpu_hours = t.h;
+          if (s.gpu.active_job) {
+            s.gpu.active_job.pod_elapsed_sec = t.p;
+            s.gpu.active_job.eta_sec = t.eta;
+          }
+        }
+        s.server_time = t.t;
+      }
+      rt.dirty.summary = true;
+    } else if (head.type === "part") {
+      const byPart = (rt.parts[head.tid] ||= {});
+      const entry = (byPart[head.part] ||= { ids: [], items: new Map() });
+      if (nl >= 0) {
+        for (const line of text.slice(nl + 1).split("\n")) {
+          const tab = line.indexOf("\t");
+          if (tab > 0) entry.items.set(line.slice(0, tab), JSON.parse(line.slice(tab + 1)));
+        }
+      }
+      if (head.ids) {
+        entry.ids = head.ids;
+        const keep = new Set(head.ids);
+        for (const key of [...entry.items.keys()]) if (!keep.has(key)) entry.items.delete(key);
+      }
+      rt.dirty[head.part] = true;
+    } else if (head.type === "waiting") {
+      rt.state = "waiting";
+    }
+  }
+
+  function rtData() {
+    if (!rt.order.length) return { ok: false };
+    multiCache = { ok: true, multi: true, order: rt.order, sessions: rt.summaries, ...rt.top };
+    const tid = (currentTrial && rt.summaries[currentTrial]) ? currentTrial : rt.order[0];
+    if (tid !== currentTrial) currentTrial = tid;
+    rtWatch(tid);
+    const summary = rt.summaries[tid];
+    if (!summary) return { ok: false };
+    const parts = rt.parts[tid] || {};
+    const list = (name) => {
+      const entry = parts[name];
+      return entry ? entry.ids.map(k => entry.items.get(k)).filter(Boolean) : [];
+    };
+    return {
+      ...summary,
+      candidates: list("candidates"),
+      experiments: list("experiments"),
+      gym_events: list("gym_events"),
+      stream: list("stream"),
+    };
+  }
+
+  let renderTimer = null;
+  let lastRender = 0;
+  function scheduleRender() {
+    if (renderTimer || !autoRefresh) return;
+    // At most one render per second; bursts of messages (a snapshot) are coalesced.
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      lastRender = Date.now();
+      refresh();
+    }, Math.max(150, 1000 - (Date.now() - lastRender)));
+  }
+
+  async function fetchDashboardData() {
+    if (IS_REALTIME) return rtData();
+    if (IS_LOCAL) {
+      const mResp = await fetch(`/api/multi`, { cache: "no-store" });
+      if (mResp.ok) {
+        const mData = await mResp.json();
+        if (mData.ok && mData.multi) {
+          multiCache = mData;
+          if (currentTrial && mData.sessions[currentTrial]) {
+            return mData.sessions[currentTrial];
+          }
+          if (!currentTrial && mData.order.length) {
+            currentTrial = mData.order[0];
+            return mData.sessions[currentTrial];
+          }
+        }
+      }
+      const qs = currentTrial ? `?trial=${encodeURIComponent(currentTrial)}` : "";
+      const resp = await fetch(`/api/dashboard${qs}`, { cache: "no-store" });
+      return await resp.json();
+    }
+    const { data: live, source } = await fetchManifest();
+    if (!live.multi || !live.order || !live.order.length) return { ok: false };
+    dataSource = source;
+    multiCache = live;
+    const tid = (currentTrial && live.sessions[currentTrial]) ? currentTrial : live.order[0];
+    currentTrial = tid;
+    const summary = live.sessions[tid];
+    if (!summary) return { ok: false };
+    const detail = await fetchVersioned(summary.detail, source);
+    return { ...summary, ...detail };
+  }
+
+  function renderSessionTabs() {
+    const bar = $("sessionTabsBar");
+    if (!multiCache || !multiCache.order || multiCache.order.length < 2) {
+      bar.style.display = "none";
+      return;
+    }
+    bar.style.display = "flex";
+    const cards = multiCache.order.map((tid, idx) => {
+      const s = multiCache.sessions[tid];
+      if (!s) return "";
+      const active = tid === currentTrial;
+      const bpb = s.best_dev_bpb != null ? `Best BPB ${s.best_dev_bpb.toFixed(5)}` : "探索初始化中";
+      return `<div class="session-tab ${active ? "selected" : ""}" data-tid="${esc(tid)}">
+        <div>
+          <div style="display:flex;align-items:center;gap:7px;font-weight:700;font-size:14px;">
+            <span class="dot" style="background:${s.session.phase === "paused" ? "var(--amber)" : s.session.is_live ? "var(--green)" : "#94a3b8"}"></span>
+            <span>Gym #${idx + 1} · ${esc(s.session.model)}</span>
+            <span class="badge badge-violet mono">effort=${esc(s.session.reasoning_effort)}</span>
+            ${s.session.instruction ? `<span class="badge ${s.session.instruction_commit === "c8e3177" ? "badge-blue" : "badge-gray"} mono">${esc(s.session.instruction)}</span>` : ""}
+            ${s.session.phase === "paused" ? `<span class="badge badge-amber">已暂停</span>` : ""}
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" class="mono">
+            ${esc(tid.slice(0, 14))} · 已跑 ${fmtDuration(s.session.elapsed_sec)} · 预算 ${s.budget.spent_pct.toFixed(2)}%
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="badge ${s.gpu.active_gpus > 0 ? "badge-blue" : "badge-gray"} mono">${s.gpu.active_gpus}/${s.gpu.max_gpus} ${esc(s.gpu.gpu_short || "H200")}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--green);margin-top:4px;" class="mono">${esc(bpb)}</div>
+        </div>
+      </div>`;
+    }).join("");
+    const totals = Object.entries(multiCache.gpu_totals || {});
+    const totalsHtml = totals.length
+      ? totals.map(([kind, t]) => `<strong class="mono" style="color:var(--primary);font-size:15px;">${t.active} / ${t.max}</strong> 张 ${esc(kind)}`).join(" · ")
+      : `<strong class="mono" style="color:var(--primary);font-size:15px;">${multiCache.total_active_gpus} / ${multiCache.total_max_gpus}</strong> 张 H200`;
+    const summaryBadge = `<div style="display:flex;align-items:center;padding:0 12px;background:var(--surface);border:1px solid var(--border);border-radius:11px;font-size:12.5px;color:var(--text-secondary);box-shadow:var(--shadow);">
+      <span>并行集群合计：${totalsHtml}</span>
+    </div>`;
+    bar.innerHTML = cards + summaryBadge;
+    bar.querySelectorAll(".session-tab").forEach(el => {
+      el.addEventListener("click", () => {
+        currentTrial = el.dataset.tid;
+        refresh();
+      });
+    });
+  }
+
+  let refreshSeq = 0;
+  let lastRefresh = 0;
+
+  async function refresh() {
+    const seq = ++refreshSeq;
+    lastRefresh = Date.now();
+    try {
+      const data = await fetchDashboardData();
+      if (seq !== refreshSeq || !data.ok) return;
+      const switched = !latestData || !latestData.session || latestData.session.trial_id !== data.session.trial_id;
+      const dirty = IS_REALTIME ? rt.dirty : { all: true };
+      if (IS_REALTIME) rt.dirty = {};
+      const changed = (part) => dirty.all || switched || dirty[part];
+      latestData = data;
+      renderSessionTabs();
+
+      // Populate trial selector
+      const sel = $("trialSelect");
+      sel.innerHTML = (data.trials || []).map(t => {
+        const tag = t.model && t.model !== "unknown" ? t.model : (Number(t.flops_limit) > 1e19 ? "正式 1.96e20" : "试跑 Pilot");
+        return `<option value="${esc(t.trial_id)}" ${t.trial_id === data.session.trial_id ? "selected" : ""}>${esc(t.short_id)} (${esc(tag)})</option>`;
+      }).join("");
+      if (!IS_LOCAL && (data.trials || []).length <= 1) {
+        sel.parentElement.style.display = "none";
+      }
+      currentTrial = data.session.trial_id;
+
+      // Header status
+      const isLive = data.session.is_live;
+      $("livePill").className = `live-pill ${isLive ? "live" : "done"}`;
+      $("liveText").textContent = data.session.phase === "paused" ? "PAUSED" : isLive ? `LIVE · ${data.session.phase.toUpperCase()}` : `ENDED · ${data.session.phase.toUpperCase()}`;
+      $("modelBadge").textContent = `${data.session.agent} · ${data.session.model} · effort=${data.session.reasoning_effort}${data.session.instruction ? ` · ${data.session.instruction}` : ""}`;
+      $("elapsedText").textContent = fmtDuration(data.session.elapsed_sec);
+      if (IS_LOCAL) {
+        $("syncTime").textContent = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      } else if (IS_REALTIME) {
+        const t = rt.tickTime || data.server_time;
+        const ageSec = t ? Math.max(0, Math.round(Date.now() / 1000 - t)) : null;
+        const state = rt.state === "open" ? `实时 · ${ageSec != null ? fmtDuration(ageSec) + "前" : ""}`
+          : rt.state === "waiting" ? "等待数据源…" : "连接断开，重连中…";
+        $("syncTime").textContent = `${t ? new Date(t * 1000).toLocaleTimeString("zh-CN", { hour12: false }) : "--"} (${state})`;
+        $("syncTime").title = "Cloudflare 推送，约每秒更新；GPU 步数约每 6 秒更新";
+      } else if (data.server_time) {
+        const snapDate = new Date(data.server_time * 1000);
+        const ageSec = Math.max(0, Math.round(Date.now() / 1000 - data.server_time));
+        const channel = dataSource === "live" ? "实时通道" : "Pages 备份";
+        $("syncTime").textContent = `${snapDate.toLocaleTimeString("zh-CN", { hour12: false })} (${fmtDuration(ageSec)}前快照 · ${channel})`;
+        $("syncTime").title = dataSource === "live"
+          ? "数据来自 live-data 分支，约每分钟更新"
+          : "实时通道暂时无法访问，改读 GitHub Pages 副本（约每 10 分钟更新），5 分钟后重试实时通道";
+      }
+
+      // KPI 1: GPU
+      $("gpuClusterTitle").textContent = `${data.gpu.cluster || "8×H200 集群"} 实时占用`;
+      $("activeGpus").textContent = data.gpu.active_gpus;
+      $("maxGpus").textContent = data.gpu.max_gpus;
+      $("gpuShortText").textContent = data.gpu.gpu_short || "H200";
+      $("gpuHoursBadge").textContent = `${data.gpu.total_gpu_hours.toFixed(3)} GPU-h`;
+      const netDeny = data.gpu.active_job && data.gpu.active_job.network === "denied" && data.gpu.isolation === "none";
+      $("gpuConfigBadge").textContent = `${data.gpu.research_dtype} · ${data.gpu.research_compile ? "compiled" : "eager"} · ${data.gpu.isolation}${netDeny ? " · net-deny" : ""}`;
+      $("activeModeText").textContent = data.gpu.active_mode;
+      renderGpuSlots(data.gpu.max_gpus, data.gpu.active_gpus, data.gpu.slot_peaks_gib);
+
+      // KPI 2: Active Job
+      const aj = data.gpu.active_job;
+      if (aj) {
+        $("koalaStageBadge").className = "badge badge-blue";
+        $("koalaStageBadge").textContent = stageLabel(aj.stage, aj);
+        $("koalaJobTitle").textContent = `${aj.operation.toUpperCase()} · ${aj.method} (${aj.candidate_short})`;
+        const totalSteps = Math.max(1, (aj.target_update || 1) - (aj.start_update || 0));
+        const doneSteps = Math.max(0, (aj.current_step || 0) - (aj.start_update || 0));
+        const pct = aj.operation === "train" ? Math.min(100, Math.round((doneSteps / totalSteps) * 100)) : 50;
+        $("jobStepBar").style.width = `${pct}%`;
+        $("koalaJobSub").textContent = `Step ${aj.current_step}/${aj.target_update} · 已跑 ${fmtDuration(aj.pod_elapsed_sec)}${aj.eta_sec ? ` · 预计剩余 ${fmtDuration(aj.eta_sec)}` : ""}${aj.sec_per_step ? ` · ${aj.sec_per_step} s/步` : ""}${aj.nodes > 1 && aj.mesh_gbit ? ` · NCCL ${Math.round(aj.mesh_gbit)} Gbit/s` : ""}`;
+      } else {
+        $("koalaStageBadge").className = "badge badge-gray";
+        $("koalaStageBadge").textContent = isLive ? "等待派发" : "已结束";
+        $("koalaJobTitle").textContent = "当前无运行中的 GPU 作业";
+        $("jobStepBar").style.width = "0%";
+        $("koalaJobSub").textContent = `历史检查点: ${data.session.checkpoints_count} 个`;
+      }
+
+      // KPI 3: Budget
+      $("budgetPctBadge").textContent = `已用 ${data.budget.spent_pct.toFixed(2)}%`;
+      $("spentFlopsText").textContent = `${fmtFlops(data.budget.spent)} / ${fmtFlops(data.budget.limit)}`;
+      $("spentBar").style.width = `${Math.min(100, data.budget.spent_pct)}%`;
+      $("reservedBar").style.width = `${Math.min(100 - data.budget.spent_pct, data.budget.reserved_pct)}%`;
+      $("budgetSubText").textContent = `预留: ${fmtFlops(data.budget.reserved)} (${data.budget.reserved_pct.toFixed(2)}%) · 约 ${data.budget.approx_updates_spent} / ${data.budget.approx_updates_limit} 步`;
+
+      // KPI 4: Best BPB & Tokens
+      $("bestBpbText").textContent = data.best_dev_bpb != null ? data.best_dev_bpb.toFixed(5) : "—";
+      $("candCountBadge").textContent = `${(data.candidates || []).length || data.candidates_count || 0} 个候选`;
+      $("cacheHitBadge").textContent = `Cache ${data.tokens.cache_hit_pct}%`;
+      const outApprox = data.tokens.output_estimated ? "≈" : "";
+      const thinkApprox = data.tokens.reasoning_estimated ? "≈" : "";
+      $("tokenSubText").textContent = `In ${fmtTokens(data.tokens.input_tokens)} · Out ${outApprox}${fmtTokens(data.tokens.output_tokens)} · 思考 ${thinkApprox}${fmtTokens(data.tokens.reasoning_output_tokens)} · 命令 ${data.tokens.commands}`;
+      $("tokenSubText").title = data.tokens.output_estimated
+        ? "Claude Code 的输出 token 只在会话结束时给出精确值；此前按思考估计加可见输出（约 4 字符/token）估算"
+        : "";
+
+      if (changed("experiments")) {
+        renderChart(data.experiments);
+        renderExperiments(data.experiments);
+      }
+      if (changed("candidates")) renderCandidates(data.candidates);
+      if (changed("stream")) renderStream(data.stream);
+    } catch (err) {
+      console.error("Dashboard sync error:", err);
+    }
+  }
+
+  // Event bindings
+  $("trialSelect").addEventListener("change", (e) => {
+    currentTrial = e.target.value;
+    refresh();
+  });
+  $("autoRefreshBtn").addEventListener("click", () => {
+    autoRefresh = !autoRefresh;
+    $("autoRefreshBtn").classList.toggle("active", autoRefresh);
+    $("autoRefreshBtn").textContent = `自动刷新: ${autoRefresh ? "开" : "关"}`;
+  });
+  $("manualRefreshBtn").addEventListener("click", refresh);
+  $("autoScrollBtn").addEventListener("click", () => {
+    autoScroll = !autoScroll;
+    $("autoScrollBtn").classList.toggle("active", autoScroll);
+  });
+  $("searchInput").addEventListener("input", (e) => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    if (latestData) renderStream(latestData.stream);
+  });
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeFilter = btn.dataset.filter;
+      if (latestData) renderStream(latestData.stream);
+    });
+  });
+  $("modalCloseBtn").addEventListener("click", () => $("modalBackdrop").classList.remove("open"));
+  $("modalBackdrop").addEventListener("click", (e) => {
+    if (e.target === $("modalBackdrop")) $("modalBackdrop").classList.remove("open");
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $("modalBackdrop").classList.remove("open");
+  });
+
+  $("autoRefreshBtn").title = IS_REALTIME
+    ? "数据有变化时推送，约每秒一次；标签页在后台 30 秒后断开"
+    : IS_LOCAL
+      ? `每 ${POLL_MS / 1000} 秒自动同步最新进度`
+      : `每 ${POLL_MS / 1000} 秒检查一次新数据；标签页在后台时暂停`;
+  if (IS_REALTIME) {
+    rtConnect();
+    document.addEventListener("visibilitychange", () => {
+      clearTimeout(rt.hiddenTimer);
+      if (document.hidden) {
+        rt.hiddenTimer = setTimeout(() => { if (document.hidden && rt.ws) rt.ws.close(); }, 30000);
+      } else if (!rt.ws) {
+        rt.retry = 1000;
+        rtConnect();
+      }
+    });
+  } else {
+    refresh();
+    setInterval(() => { if (autoRefresh && !document.hidden) refresh(); }, POLL_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && autoRefresh && Date.now() - lastRefresh >= POLL_MS) refresh();
+    });
+  }
+})();
+</script>
+</body>
+</html>
